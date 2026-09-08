@@ -233,7 +233,7 @@ fun Logging2(
                 Spacer(modifier = Modifier.width(10.dp))
 
                 CategoryChip(
-                    icon = R.drawable.badminton,
+                    icon = R.drawable.badminton_icon,
                     text = "Badminton"
                 )
             }
