@@ -12,6 +12,7 @@ build/
 
 # Local configuration
 local.properties
+venv/
 
 # Generated files
 captures/
