@@ -13,6 +13,19 @@ build/
 # Local configuration
 local.properties
 venv/
+.venv/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environment variables & secrets (NEVER commit secrets!)
+.env
+*.env
+backend/.env
+backend/check_db.py
+!.env.example
+!backend/.env.example
 
 # Generated files
 captures/
