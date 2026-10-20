@@ -3,9 +3,10 @@
 build/
 **/build/
 
-# Android Studio
+# Android Studio & VS Code
 .idea/
 *.iml
+.vscode/
 
 # Kotlin
 .kotlin/
