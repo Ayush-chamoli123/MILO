@@ -69,46 +69,60 @@ class MiloAudioPlayer {
     private fun playSynthesizedFallback() {
         try {
             val sampleRate = 44100
-            val durationSeconds = 3.0
+            val durationSeconds = 4.8
             val numSamples = (sampleRate * durationSeconds).toInt()
             val buffer = ShortArray(numSamples)
-            val tImpact = 1.0
+            val tImpact = 2.4
 
             for (i in 0 until numSamples) {
                 val t = i.toDouble() / sampleRate
                 var sample = 0.0
 
-                // 1. Swarm Whoosh (0.2s to 1.0s)
-                if (t in 0.2..tImpact) {
-                    val progress = (t - 0.2) / (tImpact - 0.2)
-                    val freq = 150.0 + 350.0 * Math.pow(progress, 2.0)
-                    val amp = 0.3 * Math.pow(progress, 1.8)
+                // 0. Ambient intro pad (0.0s to 1.0s)
+                if (t < 1.0) {
+                    val padEnv = 0.5 * (1.0 - kotlin.math.cos(Math.PI * t / 1.0)) * 0.08
+                    val padOsc = sin(2.0 * Math.PI * 110.0 * t) + 0.4 * sin(2.0 * Math.PI * 220.0 * t)
+                    sample += padOsc * padEnv
+                }
+
+                // 1. Smooth Rising Swarm / Whoosh (0.4s to 2.4s)
+                if (t in 0.4..tImpact) {
+                    val progress = (t - 0.4) / (tImpact - 0.4)
+                    val smoothP = 0.5 * (1.0 - kotlin.math.cos(Math.PI * progress))
+                    val freq = 130.0 + 380.0 * Math.pow(smoothP, 1.8)
+                    val amp = 0.26 * Math.pow(smoothP, 1.5)
                     sample += sin(2.0 * Math.PI * freq * t) * amp
                 }
 
-                // 2. Convergence Impact Chord (t >= 1.0s)
+                // 2. Convergence Impact Chord (t >= 2.4s)
                 if (t >= tImpact) {
                     val dt = t - tImpact
-                    // Sub-bass punch (60Hz -> 40Hz)
-                    val subEnv = exp(-dt * 4.2)
-                    val subPitch = 60.0 * exp(-dt * 3.0) + 40.0
-                    sample += sin(2.0 * Math.PI * subPitch * dt) * subEnv * 0.45
+                    // Sub-bass punch (62Hz -> 38Hz)
+                    val subEnv = exp(-dt * 3.2)
+                    val subPitch = 62.0 * exp(-dt * 2.5) + 38.0
+                    sample += sin(2.0 * Math.PI * subPitch * dt) * subEnv * 0.48
 
-                    // Warm harmonic chord (A3, C#4, E4, G#4, B4)
-                    val chordEnv = exp(-dt * 1.5)
-                    val chordFreqs = doubleArrayOf(220.0, 277.18, 329.63, 415.30, 493.88)
-                    for (f in chordFreqs) {
-                        sample += sin(2.0 * Math.PI * f * dt) * chordEnv * 0.10
+                    // Warm harmonic Major 9th chord (A2, A3, C#4, E4, G#4, B4)
+                    val chordEnv = exp(-dt * 1.1)
+                    val chordFreqs = doubleArrayOf(110.0, 220.0, 277.18, 329.63, 415.30, 493.88)
+                    val weights = doubleArrayOf(0.08, 0.10, 0.09, 0.08, 0.07, 0.06)
+                    for (idx in chordFreqs.indices) {
+                        val f = chordFreqs[idx]
+                        val w = weights[idx]
+                        val osc = sin(2.0 * Math.PI * f * dt) + 0.28 * sin(2.0 * Math.PI * (f * 2.005) * dt)
+                        sample += osc * chordEnv * w
                     }
 
-                    // Bright crystalline bell overtone
-                    val chimeEnv = exp(-dt * 2.2)
-                    sample += sin(2.0 * Math.PI * 1760.0 * dt) * chimeEnv * 0.06
-                    sample += sin(2.0 * Math.PI * 2640.0 * dt) * chimeEnv * 0.04
+                    // Bright crystalline bell overtones
+                    val chimeEnv = exp(-dt * 1.8)
+                    val chimes = doubleArrayOf(880.0, 1318.5, 1760.0, 2637.0)
+                    for (cf in chimes) {
+                        sample += sin(2.0 * Math.PI * cf * dt) * chimeEnv * 0.035
+                    }
                 }
 
                 // Clamping to 16-bit PCM
-                val clamped = max(-1.0, min(1.0, sample * 0.85))
+                val clamped = max(-1.0, min(1.0, sample * 0.88))
                 buffer[i] = (clamped * 32767.0).toInt().toShort()
             }
 

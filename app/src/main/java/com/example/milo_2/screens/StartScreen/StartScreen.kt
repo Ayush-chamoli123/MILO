@@ -158,89 +158,99 @@ fun StartScreen(
 
     // Trigger choreographed timeline
     LaunchedEffect(Unit) {
-        // Trigger Sonic Theme at the exact fusion sync point
+        // Trigger Sonic Theme at the exact fusion sync point (600ms + 2400ms audio impact = 3000ms fusion)
         launch {
-            delay(1200) // sync with inward acceleration & collision
+            delay(600)
             audioPlayer.playIntroSound(context)
         }
 
-        // Animate master timeline to completion
+        // Animate master timeline to completion with a smooth, slower cinematic duration (5.6 seconds)
         masterProgress.animateTo(
             targetValue = 1.0f,
-            animationSpec = tween(durationMillis = 4100, easing = LinearEasing)
+            animationSpec = tween(durationMillis = 5600, easing = LinearEasing)
         )
 
         // Seamless transition to next screen
-        delay(200)
+        delay(300)
         onFinished()
     }
 
     val progress = masterProgress.value
 
-    // Animation Milestones
-    // 0.00 -> 0.30 (0 - 1200ms): Emergence & Floating
-    // 0.30 -> 0.55 (1200 - 2250ms): Fast Inward Magnetic Convergence
-    // 0.55 -> 0.70 (2250 - 2870ms): Impact Fusion Burst + Shockwave
-    // 0.60 -> 1.00 (2460 - 4100ms): Logo emergence, shimmer, tagline
+    // Animation Milestones (Smooth 5.6s timeline)
+    // 0.00 -> 0.24 (0 - 1350ms): Gentle emergence & organic floating orbit
+    // 0.24 -> 0.54 (1350 - 3020ms): Silky smooth magnetic convergence with glowing trails
+    // 0.54 (approx 3020ms): Fusion collision sync with sonic sub-bass impact
+    // 0.53 -> 0.82 (2970 - 4600ms): Decelerating shockwave ripple & particle fireworks
+    // 0.53 -> 0.76 (2970 - 4250ms): Elegant logo spring emergence & ambient halo
+    // 0.66 -> 0.92 (3700 - 5150ms): Slow metallic shimmer sweep
+    // 0.70 -> 0.92 (3920 - 5150ms): Tagline upward glide & fade-in
 
     val convergenceProgress = when {
-        progress < 0.28f -> 0f
-        progress in 0.28f..0.55f -> {
-            val localT = (progress - 0.28f) / (0.55f - 0.28f)
-            CubicBezierEasing(0.4f, 0.0f, 0.1f, 1.0f).transform(localT)
+        progress < 0.24f -> 0f
+        progress in 0.24f..0.54f -> {
+            val localT = (progress - 0.24f) / (0.54f - 0.24f)
+            // Silky smooth ease-in-out curve
+            CubicBezierEasing(0.38f, 0.0f, 0.20f, 1.0f).transform(localT)
         }
         else -> 1f
     }
 
-    // Characters opacity: visible until collision, then vanish into the logo
+    // Characters opacity: smooth fade in, stay bright, then gracefully dissolve into the core
     val characterAlpha = when {
-        progress < 0.28f -> (progress / 0.20f).coerceIn(0f, 1f)
-        progress in 0.28f..0.54f -> 1f
-        progress in 0.54f..0.58f -> 1f - ((progress - 0.54f) / 0.04f)
+        progress < 0.18f -> (progress / 0.15f).coerceIn(0f, 1f)
+        progress in 0.18f..0.51f -> 1f
+        progress in 0.51f..0.56f -> {
+            val localT = (progress - 0.51f) / 0.05f
+            (1f - localT * localT).coerceIn(0f, 1f)
+        }
         else -> 0f
     }
 
-    // Shockwave expansion progress
+    // Decelerating Shockwave expansion
     val shockwaveProgress = when {
-        progress < 0.54f -> 0f
-        progress in 0.54f..0.80f -> (progress - 0.54f) / 0.26f
+        progress < 0.53f -> 0f
+        progress in 0.53f..0.82f -> {
+            val localT = (progress - 0.53f) / 0.29f
+            CubicBezierEasing(0.12f, 0.82f, 0.25f, 1.0f).transform(localT)
+        }
         else -> 1f
     }
     val shockwaveAlpha = when {
-        progress < 0.54f -> 0f
-        progress in 0.54f..0.75f -> (1f - (progress - 0.54f) / 0.21f).coerceIn(0f, 1f)
+        progress < 0.53f -> 0f
+        progress in 0.53f..0.78f -> (1f - (progress - 0.53f) / 0.25f).coerceIn(0f, 1f)
         else -> 0f
     }
 
-    // Logo & Brand emergence
+    // Logo & Brand emergence: gentle dampened curve without harsh jarring bounce
     val logoScale = when {
-        progress < 0.54f -> 0.0f
-        progress in 0.54f..0.72f -> {
-            val localT = (progress - 0.54f) / 0.18f
-            // Overshoot bounce spring curve
-            val eased = CubicBezierEasing(0.175f, 0.885f, 0.32f, 1.275f).transform(localT)
+        progress < 0.53f -> 0.0f
+        progress in 0.53f..0.75f -> {
+            val localT = (progress - 0.53f) / 0.22f
+            val eased = CubicBezierEasing(0.16f, 1.0f, 0.30f, 1.0f).transform(localT)
             eased * 1.0f
         }
-        else -> 1.0f + (progress - 0.72f) * 0.05f // subtle slow push
+        else -> 1.0f + (progress - 0.75f) * 0.025f // subtle slow push
     }
     val logoAlpha = when {
-        progress < 0.54f -> 0f
-        progress in 0.54f..0.66f -> ((progress - 0.54f) / 0.12f).coerceIn(0f, 1f)
+        progress < 0.53f -> 0f
+        progress in 0.53f..0.66f -> ((progress - 0.53f) / 0.13f).coerceIn(0f, 1f)
         else -> 1f
     }
 
-    // Shimmer sweep across the MILO letters
+    // Shimmer sweep across the MILO letters: slow and luxurious
     val shimmerOffset = when {
-        progress < 0.68f -> -1.0f
-        progress in 0.68f..0.92f -> ((progress - 0.68f) / 0.24f) * 2.0f - 1.0f
+        progress < 0.66f -> -1.0f
+        progress in 0.66f..0.92f -> ((progress - 0.66f) / 0.26f) * 2.2f - 1.0f
         else -> 1.2f
     }
 
-    // Tagline fade-in
-    val taglineAlpha = when {
-        progress < 0.74f -> 0f
-        else -> ((progress - 0.74f) / 0.18f).coerceIn(0f, 1f)
+    // Tagline fade-in and vertical glide
+    val taglineProgress = when {
+        progress < 0.70f -> 0f
+        else -> ((progress - 0.70f) / 0.20f).coerceIn(0f, 1f)
     }
+    val taglineAlpha = taglineProgress
 
     BoxWithConstraints(
         modifier = Modifier
@@ -318,10 +328,11 @@ fun StartScreen(
                 )
             }
 
-            // 32 Radial Fusion Sparks Exploding Outward
-            if (progress in 0.54f..0.85f) {
-                val sparkProgress = (progress - 0.54f) / 0.31f
-                val sparkAlpha = (1f - sparkProgress).coerceIn(0f, 1f)
+            // 32 Radial Fusion Sparks Exploding Outward with smooth deceleration
+            if (progress in 0.53f..0.85f) {
+                val sparkRaw = ((progress - 0.53f) / 0.32f).coerceIn(0f, 1f)
+                val sparkProgress = CubicBezierEasing(0.10f, 0.75f, 0.20f, 1.0f).transform(sparkRaw)
+                val sparkAlpha = (1f - sparkRaw).coerceIn(0f, 1f)
 
                 for (spark in sparkParticles) {
                     val dist = spark.speed * sparkProgress
@@ -330,7 +341,7 @@ fun StartScreen(
                         center.y + dist * sin(spark.angleRad)
                     )
                     drawCircle(
-                        color = spark.color.copy(alpha = sparkAlpha),
+                        color = spark.color.copy(alpha = sparkAlpha * 0.90f),
                         radius = spark.size * (1f - sparkProgress * 0.5f),
                         center = sparkPos
                     )
@@ -346,11 +357,12 @@ fun StartScreen(
                 val angleRad = Math.toRadians(char.angleDegrees.toDouble()).toFloat()
                 val currentDistDp = char.initialDistanceDp * (1f - convergenceProgress)
 
-                // Individual subtle organic hovering offset
-                val hoverPhase = (progress * 8f + char.angleDegrees / 40f)
-                val hoverOffsetDp = (sin(hoverPhase) * 4f * (1f - convergenceProgress)).dp
+                // Individual subtle organic hovering & drifting offset
+                val hoverPhase = (progress * 5f * Math.PI.toFloat()) + (char.angleDegrees * (Math.PI / 180f)).toFloat()
+                val hoverOffsetDp = (sin(hoverPhase) * 6f * (1f - convergenceProgress)).dp
+                val hoverSideDp = (cos(hoverPhase * 0.7f) * 4f * (1f - convergenceProgress)).dp
 
-                val xOffset = currentDistDp * cos(angleRad)
+                val xOffset = currentDistDp * cos(angleRad) + hoverSideDp
                 val yOffset = currentDistDp * sin(angleRad) + hoverOffsetDp
 
                 Box(
@@ -358,7 +370,7 @@ fun StartScreen(
                         .align(Alignment.Center)
                         .offset(x = xOffset, y = yOffset)
                         .alpha(characterAlpha)
-                        .scale((1f - convergenceProgress * 0.4f) * (if (convergenceProgress < 0.1f) ambientPulse.value else 1f)),
+                        .scale((1f - convergenceProgress * 0.35f) * (if (convergenceProgress < 0.1f) ambientPulse.value else 1f)),
                     contentAlignment = Alignment.Center
                 ) {
                     // Glowing outer aura
@@ -459,14 +471,17 @@ fun StartScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Tagline with smooth letter tracking expansion
+                // Tagline with smooth letter tracking expansion and gentle upward slide
+                val taglineSlideY = ((1f - taglineAlpha) * 10f).dp
                 Text(
                     text = "Find People. Do More Together.",
                     color = Color(0xFFF0F4F8).copy(alpha = 0.92f),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = (0.5 + progress * 0.8).sp,
-                    modifier = Modifier.alpha(taglineAlpha)
+                    modifier = Modifier
+                        .offset(y = taglineSlideY)
+                        .alpha(taglineAlpha)
                 )
             }
         }
