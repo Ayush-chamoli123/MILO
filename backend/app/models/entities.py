@@ -9,7 +9,7 @@ Strictly adheres to:
 4. Comprehensive Database Verification Test Cases (AUTH-*, PROF-*, ACT-*, JOIN-*, GEO-*, CHAT-*, NOT-*, SAFE-*, ML-*)
 """
 
-from datetime import date, datetime, time
+from datetime import date as pydate, datetime, time as pytime
 import enum
 from uuid import uuid4
 
@@ -886,12 +886,12 @@ class Requirement(Base):
         nullable=True,
         comment="Descriptive sub-category or genre",
     )
-    date: Mapped[date | None] = mapped_column(
+    date: Mapped[pydate | None] = mapped_column(
         SADate,
         nullable=True,
         comment="Target date for the planned requirement",
     )
-    time: Mapped[time | None] = mapped_column(
+    time: Mapped[pytime | None] = mapped_column(
         SATime,
         nullable=True,
         comment="Target time of day for the requirement",
@@ -1015,17 +1015,17 @@ class Activity(Base):
         nullable=False,
         comment="Activity category (Sports, Study, Walking, Cycling, Social)",
     )
-    date: Mapped[date | None] = mapped_column(
+    date: Mapped[pydate | None] = mapped_column(
         SADate,
         nullable=True,
         comment="Date on which the activity is scheduled to take place",
     )
-    time: Mapped[time | None] = mapped_column(
+    time: Mapped[pytime | None] = mapped_column(
         SATime,
         nullable=True,
         comment="Time at which the activity begins",
     )
-    end_time: Mapped[time | None] = mapped_column(
+    end_time: Mapped[pytime | None] = mapped_column(
         SATime,
         nullable=True,
         comment="Time at which the activity concludes (ACT-04)",

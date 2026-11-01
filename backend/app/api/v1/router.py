@@ -1,0 +1,11 @@
+"""
+MILO API v1 Main Router
+=======================
+Aggregates all API v1 endpoint routers.
+"""
+
+from fastapi import APIRouter
+from app.api.v1.endpoints import auth
+
+api_router = APIRouter()
+api_router.include_router(auth.router)
