@@ -1,13 +1,14 @@
 """
 MILO User Repository
 ====================
-Encapsulates all database persistence and query operations for the User entity
-and related UserSession records.
+Encapsulates all database persistence and query operations for the User entity,
+UserSession records, and Verification/OTP records.
 Strictly implements requirements for AUTH-01 through AUTH-12:
 - Unique lookup & existence checking for email, username, and phone number
 - User creation with proper transactional commits/flushes
 - Soft deletion preserving relational integrity
 - Session tracking and token revocation checks
+- Identity and OTP verification auditing (AUTH-09)
 """
 
 from datetime import datetime, timezone
@@ -15,11 +16,18 @@ from typing import Sequence
 from sqlalchemy import func, select, or_
 from sqlalchemy.orm import Session
 
-from app.models.entities import User, UserSession, UserStatus
+from app.models.entities import (
+    User,
+    UserSession,
+    UserStatus,
+    Verification,
+    VerificationStatus,
+    VerificationType,
+)
 
 
 class UserRepository:
-    """Repository handling database operations for User and UserSession entities."""
+    """Repository handling database operations for User, UserSession, and Verification entities."""
 
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -232,3 +240,94 @@ class UserRepository:
             else:
                 self.db.flush()
         return count
+
+    # ==========================================================================
+    # VERIFICATION & OTP OPERATIONS (AUTH-09)
+    # ==========================================================================
+
+    def create_verification(self, verification: Verification, auto_commit: bool = True) -> Verification:
+        """Persists a newly created verification audit record."""
+        self.db.add(verification)
+        if auto_commit:
+            self.db.commit()
+            self.db.refresh(verification)
+        else:
+            self.db.flush()
+        return verification
+
+    def get_latest_pending_verification(
+        self, user_id: str, verification_type: VerificationType
+    ) -> Verification | None:
+        """
+        Retrieves the most recent pending verification record for a user and channel.
+        """
+        query = (
+            select(Verification)
+            .where(
+                Verification.user_id == user_id,
+                Verification.type == verification_type,
+                Verification.status == VerificationStatus.PENDING,
+            )
+            .order_by(Verification.expires_at.desc())
+        )
+        return self.db.execute(query).scalars().first()
+
+    def invalidate_pending_verifications(
+        self, user_id: str, verification_type: VerificationType, auto_commit: bool = True
+    ) -> int:
+        """
+        Marks all existing pending verification requests as FAILED before issuing a new one.
+        """
+        query = select(Verification).where(
+            Verification.user_id == user_id,
+            Verification.type == verification_type,
+            Verification.status == VerificationStatus.PENDING,
+        )
+        records = self.db.execute(query).scalars().all()
+        count = 0
+        for r in records:
+            r.status = VerificationStatus.FAILED
+            self.db.add(r)
+            count += 1
+        if count > 0:
+            if auto_commit:
+                self.db.commit()
+            else:
+                self.db.flush()
+        return count
+
+    def update_verification(self, verification: Verification, auto_commit: bool = True) -> Verification:
+        """Persists updates to an existing verification record (e.g., attempt counter, status)."""
+        self.db.add(verification)
+        if auto_commit:
+            self.db.commit()
+            self.db.refresh(verification)
+        else:
+            self.db.flush()
+        return verification
+
+    def mark_email_verified(self, user_id: str, auto_commit: bool = True) -> bool:
+        """Updates user account fast-check flag indicating email confirmation."""
+        user = self.get_by_id(user_id)
+        if not user:
+            return False
+        user.is_email_verified = True
+        self.db.add(user)
+        if auto_commit:
+            self.db.commit()
+        else:
+            self.db.flush()
+        return True
+
+    def mark_phone_verified(self, user_id: str, auto_commit: bool = True) -> bool:
+        """Updates user account fast-check flag indicating phone confirmation."""
+        user = self.get_by_id(user_id)
+        if not user:
+            return False
+        user.is_phone_verified = True
+        self.db.add(user)
+        if auto_commit:
+            self.db.commit()
+        else:
+            self.db.flush()
+        return True

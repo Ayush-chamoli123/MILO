@@ -12,6 +12,9 @@ from app.models.entities import (
     UserSession,
     UserStatus,
     ProfileVisibility,
+    Verification,
+    VerificationType,
+    VerificationStatus,
 )
 
 __all__ = [
@@ -19,4 +22,7 @@ __all__ = [
     "UserSession",
     "UserStatus",
     "ProfileVisibility",
+    "Verification",
+    "VerificationType",
+    "VerificationStatus",
 ]

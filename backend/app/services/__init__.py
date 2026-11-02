@@ -15,6 +15,10 @@ from app.services.auth_service import (
     AccountSuspendedError,
     InvalidTokenError,
     SessionRevokedOrExpiredError,
+    UserNotFoundError,
+    InvalidOtpError,
+    OtpExpiredError,
+    OtpMaxAttemptsError,
 )
 
 __all__ = [
@@ -28,4 +32,8 @@ __all__ = [
     "AccountSuspendedError",
     "InvalidTokenError",
     "SessionRevokedOrExpiredError",
+    "UserNotFoundError",
+    "InvalidOtpError",
+    "OtpExpiredError",
+    "OtpMaxAttemptsError",
 ]

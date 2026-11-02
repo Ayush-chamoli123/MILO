@@ -1,8 +1,8 @@
 """
-MILO Authentication Schemas
-===========================
+MILO Authentication & Verification Schemas
+==========================================
 Pydantic v2 request and response schemas for user registration, authentication,
-token refresh, and user profile serialization.
+token refresh, OTP email/phone verification, and user profile serialization.
 Strictly excludes sensitive attributes such as `password_hash`.
 """
 
@@ -11,7 +11,7 @@ import re
 from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.entities import ProfileVisibility, UserStatus
+from app.models.entities import ProfileVisibility, UserStatus, VerificationType, VerificationStatus
 
 # Database constraint regex compliant with ck_users_email_format in models/entities.py
 EMAIL_PATTERN = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
@@ -174,6 +174,68 @@ class PasswordChangeRequest(BaseModel):
     )
 
 
+class SendOtpRequest(BaseModel):
+    """
+    Request to generate and send an OTP code to email or mobile phone.
+    Works for both authenticated users and public registration flows.
+    """
+    type: VerificationType = Field(
+        default=VerificationType.EMAIL,
+        description="Verification channel: EMAIL or PHONE",
+        examples=["EMAIL"],
+    )
+    email: str | None = Field(
+        default=None,
+        description="Target email address (required if user is unauthenticated)",
+        examples=["alice@example.com"],
+    )
+    phone_number: str | None = Field(
+        default=None,
+        description="Target phone number (required if verifying phone while unauthenticated)",
+        examples=["+15551234567"],
+    )
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str | None) -> str | None:
+        if v is not None:
+            return v.strip().lower()
+        return None
+
+
+class VerifyOtpRequest(BaseModel):
+    """
+    Request to submit and validate a 6-digit OTP code for email or mobile.
+    """
+    type: VerificationType = Field(
+        default=VerificationType.EMAIL,
+        description="Verification channel: EMAIL or PHONE",
+        examples=["EMAIL"],
+    )
+    otp_code: str = Field(
+        ...,
+        min_length=4,
+        max_length=10,
+        description="4 to 6 digit numeric OTP verification code",
+        examples=["492810"],
+    )
+    email: str | None = Field(
+        default=None,
+        description="Target email address (if unauthenticated)",
+        examples=["alice@example.com"],
+    )
+    phone_number: str | None = Field(
+        default=None,
+        description="Target phone number (if unauthenticated)",
+        examples=["+15551234567"],
+    )
+
+    @field_validator("otp_code")
+    @classmethod
+    def clean_otp(cls, v: str) -> str:
+        return v.strip()
+
+
 # ==============================================================================
 # RESPONSE SCHEMAS (Notice: NEVER includes password_hash)
 # ==============================================================================
@@ -225,6 +287,30 @@ class TokenPayload(BaseModel):
     exp: int | None = None
     iat: int | None = None
     type: str | None = None
+
+
+class OtpSentResponse(BaseModel):
+    """Confirmation payload returned when an OTP is dispatched."""
+    message: str
+    type: VerificationType
+    destination: str = Field(
+        ...,
+        description="Masked destination address (e.g. al***@example.com or +1555***4567)",
+    )
+    expires_in_seconds: int = Field(
+        default=600,
+        description="OTP validity period in seconds (default: 10 minutes)",
+    )
+
+
+class VerificationResponse(BaseModel):
+    """Confirmation payload returned upon successful OTP verification."""
+    message: str
+    verified: bool
+    type: VerificationType
+    user_id: str
+    is_email_verified: bool
+    is_phone_verified: bool
 
 
 # Backward-compatible aliases
