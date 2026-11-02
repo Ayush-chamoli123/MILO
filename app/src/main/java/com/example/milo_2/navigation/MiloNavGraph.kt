@@ -21,10 +21,18 @@ fun MiloNavGraph() {
         startDestination = Screen.Start.route
     ) {
         composable(Screen.Start.route) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val sessionManager = androidx.compose.runtime.remember { com.example.milo_2.data.auth.SessionManager(context) }
             StartScreen(
                 onFinished = {
-                    navController.navigate(Screen.Logging1.route) {
-                        popUpTo(Screen.Start.route) { inclusive = true }
+                    if (sessionManager.isLoggedIn()) {
+                        navController.navigate(Screen.Dashboard.route) {
+                            popUpTo(Screen.Start.route) { inclusive = true }
+                        }
+                    } else {
+                        navController.navigate(Screen.Logging1.route) {
+                            popUpTo(Screen.Start.route) { inclusive = true }
+                        }
                     }
                 }
             )
@@ -96,7 +104,13 @@ fun MiloNavGraph() {
         }
 
         composable(Screen.Dashboard.route) {
-            Dashboard()
+            Dashboard(
+                onLogout = {
+                    navController.navigate(Screen.Welcome.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }

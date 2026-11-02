@@ -59,6 +59,7 @@ dependencies {
     implementation(libs.firebase.auth)
 
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

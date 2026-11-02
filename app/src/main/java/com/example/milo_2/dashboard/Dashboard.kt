@@ -43,6 +43,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.example.milo_2.data.auth.AuthApiClient
+import com.example.milo_2.data.auth.SessionManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -98,7 +103,9 @@ data class ActivityItem(
 // ============================================================
 
 @Composable
-fun Dashboard() {
+fun Dashboard(
+    onLogout: () -> Unit = {}
+) {
 
     var selectedTab by remember {
         mutableIntStateOf(0)
@@ -140,7 +147,7 @@ fun Dashboard() {
                 3 -> ChatScreen()
 
                 // PROFILE
-                4 -> ProfileScreen()
+                4 -> ProfileScreen(onLogout = onLogout)
             }
         }
     }
@@ -1170,7 +1177,14 @@ fun ChatScreen() {
 // ============================================================
 
 @Composable
-fun ProfileScreen() {
+fun ProfileScreen(
+    onLogout: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val sessionManager = remember { SessionManager(context) }
+    val authClient = remember { AuthApiClient(context) }
+    val currentUser = remember { sessionManager.getUser() }
 
     LazyColumn(
         modifier = Modifier
@@ -1210,7 +1224,7 @@ fun ProfileScreen() {
 
 
             Text(
-                text = "Ayush",
+                text = currentUser?.fullName?.ifBlank { "Milo User" } ?: "Milo User",
                 color = MiloWhite,
                 fontSize = 25.sp,
                 fontWeight = FontWeight.Bold
@@ -1223,7 +1237,7 @@ fun ProfileScreen() {
 
 
             Text(
-                text = "Dehradun • Student",
+                text = if (currentUser != null) "@${currentUser.username} • ${currentUser.email}" else "Dehradun • Student",
                 color = MiloSecondary,
                 fontSize = 13.sp
             )
@@ -1284,6 +1298,38 @@ fun ProfileScreen() {
                 location = "Central Library",
                 date = "Tomorrow • 4:00 PM",
                 image = R.drawable.dsa_study
+            )
+        }
+
+        item {
+            Spacer(
+                modifier = Modifier.height(28.dp)
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFFE53935).copy(alpha = 0.2f))
+                    .clickable {
+                        coroutineScope.launch {
+                            authClient.logout()
+                            onLogout()
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Log Out",
+                    color = Color(0xFFFF5252),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(
+                modifier = Modifier.height(20.dp)
             )
         }
     }

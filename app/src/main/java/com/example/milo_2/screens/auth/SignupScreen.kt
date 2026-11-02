@@ -1,10 +1,10 @@
 package com.example.milo_2.screens.auth
 
-import com.google.firebase.auth.FirebaseAuth
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,23 +12,32 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.milo_2.data.auth.AuthApiClient
+import com.example.milo_2.data.auth.SessionManager
+import kotlinx.coroutines.launch
 
 
 // ========================================================
@@ -55,8 +64,16 @@ fun SignupScreen(
     onLogin: () -> Unit = {},
     onSignupSuccess: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val authClient = remember { AuthApiClient(context) }
+    val sessionManager = remember { SessionManager(context) }
 
     var name by remember {
+        mutableStateOf("")
+    }
+
+    var username by remember {
         mutableStateOf("")
     }
 
@@ -80,11 +97,15 @@ fun SignupScreen(
         mutableStateOf(false)
     }
 
-    // Firebase Authentication
-    val auth = remember {
-        FirebaseAuth.getInstance()
+    var showServerDialog by remember {
+        mutableStateOf(false)
     }
 
+    var serverUrlInput by remember {
+        mutableStateOf(sessionManager.baseUrl)
+    }
+
+    val scrollState = rememberScrollState()
 
     Column(
         modifier = Modifier
@@ -92,6 +113,7 @@ fun SignupScreen(
             .background(MiloWhite)
             .statusBarsPadding()
             .navigationBarsPadding()
+            .verticalScroll(scrollState)
             .padding(
                 start = 28.dp,
                 end = 28.dp,
@@ -123,11 +145,9 @@ fun SignupScreen(
             )
         }
 
-
         Spacer(
-            modifier = Modifier.height(20.dp)
+            modifier = Modifier.height(16.dp)
         )
-
 
         // =================================================
         // TITLE
@@ -140,11 +160,9 @@ fun SignupScreen(
             fontWeight = FontWeight.Bold
         )
 
-
         Spacer(
             modifier = Modifier.height(8.dp)
         )
-
 
         Text(
             text = "Create your account and start\npooling with people.",
@@ -153,11 +171,9 @@ fun SignupScreen(
             lineHeight = 22.sp
         )
 
-
         Spacer(
-            modifier = Modifier.height(32.dp)
+            modifier = Modifier.height(24.dp)
         )
-
 
         // =================================================
         // NAME
@@ -170,14 +186,30 @@ fun SignupScreen(
                 errorMessage = ""
             },
             label = "Full Name",
-            placeholder = "Enter your name"
+            placeholder = "Enter your full name"
         )
-
 
         Spacer(
-            modifier = Modifier.height(16.dp)
+            modifier = Modifier.height(14.dp)
         )
 
+        // =================================================
+        // USERNAME
+        // =================================================
+
+        MiloTextField(
+            value = username,
+            onValueChange = {
+                username = it
+                errorMessage = ""
+            },
+            label = "Username",
+            placeholder = "Choose a unique username"
+        )
+
+        Spacer(
+            modifier = Modifier.height(14.dp)
+        )
 
         // =================================================
         // EMAIL
@@ -193,11 +225,9 @@ fun SignupScreen(
             placeholder = "Enter your email"
         )
 
-
         Spacer(
-            modifier = Modifier.height(16.dp)
+            modifier = Modifier.height(14.dp)
         )
-
 
         // =================================================
         // PASSWORD
@@ -210,15 +240,13 @@ fun SignupScreen(
                 errorMessage = ""
             },
             label = "Password",
-            placeholder = "Create a password",
+            placeholder = "Minimum 8 characters",
             isPassword = true
         )
 
-
         Spacer(
-            modifier = Modifier.height(16.dp)
+            modifier = Modifier.height(14.dp)
         )
-
 
         // =================================================
         // CONFIRM PASSWORD
@@ -235,18 +263,15 @@ fun SignupScreen(
             isPassword = true
         )
 
-
         Spacer(
-            modifier = Modifier.height(18.dp)
+            modifier = Modifier.height(16.dp)
         )
-
 
         // =================================================
         // ERROR MESSAGE
         // =================================================
 
         if (errorMessage.isNotEmpty()) {
-
             Text(
                 text = errorMessage,
                 color = Color.Red,
@@ -260,9 +285,8 @@ fun SignupScreen(
             )
         }
 
-
         // =================================================
-        // CREATE ACCOUNT
+        // CREATE ACCOUNT BUTTON
         // =================================================
 
         Box(
@@ -278,64 +302,51 @@ fun SignupScreen(
                     shape = RoundedCornerShape(18.dp)
                 )
                 .clickable(enabled = !isLoading) {
-
-                    // -------------------------------------
-                    // BASIC VALIDATION
-                    // -------------------------------------
-
                     if (name.isBlank()) {
                         errorMessage = "Please enter your name"
                         return@clickable
                     }
 
-                    if (email.isBlank()) {
-                        errorMessage = "Please enter your email"
+                    if (username.isBlank() || username.length < 3) {
+                        errorMessage = "Username must be at least 3 characters"
                         return@clickable
                     }
 
-                    if (password.length < 6) {
-                        errorMessage =
-                            "Password must be at least 6 characters"
+                    if (email.isBlank() || !email.contains("@")) {
+                        errorMessage = "Please enter a valid email"
+                        return@clickable
+                    }
+
+                    if (password.length < 8) {
+                        errorMessage = "Password must be at least 8 characters"
                         return@clickable
                     }
 
                     if (password != confirmPassword) {
-                        errorMessage =
-                            "Passwords do not match"
+                        errorMessage = "Passwords do not match"
                         return@clickable
                     }
-
-
-                    // -------------------------------------
-                    // START FIREBASE SIGNUP
-                    // -------------------------------------
 
                     errorMessage = ""
                     isLoading = true
 
-                    auth.createUserWithEmailAndPassword(
-                        email.trim(),
-                        password
-                    ).addOnCompleteListener { task ->
-
+                    coroutineScope.launch {
+                        val result = authClient.register(
+                            fullName = name.trim(),
+                            username = username.trim(),
+                            email = email.trim(),
+                            password = password
+                        )
                         isLoading = false
-
-                        if (task.isSuccessful) {
-
-                            // Account successfully created
+                        result.onSuccess {
                             onSignupSuccess()
-
-                        } else {
-
-                            errorMessage =
-                                task.exception?.message
-                                    ?: "Account creation failed"
+                        }.onFailure { ex ->
+                            errorMessage = ex.message ?: "Account creation failed. Please try again."
                         }
                     }
                 },
             contentAlignment = Alignment.Center
         ) {
-
             Text(
                 text = if (isLoading) {
                     "Creating Account..."
@@ -348,14 +359,12 @@ fun SignupScreen(
             )
         }
 
-
         Spacer(
-            modifier = Modifier.height(22.dp)
+            modifier = Modifier.height(24.dp)
         )
 
-
         // =================================================
-        // LOGIN
+        // LOGIN LINK
         // =================================================
 
         Text(
@@ -369,11 +378,71 @@ fun SignupScreen(
                 }
                 .padding(8.dp)
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Backend URL indicator
+        Row(
+            modifier = Modifier
+                .clickable {
+                    serverUrlInput = sessionManager.baseUrl
+                    showServerDialog = true
+                }
+                .padding(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Backend: ${sessionManager.baseUrl} ⚙️",
+                color = MiloGray,
+                fontSize = 12.sp
+            )
+        }
+    }
+
+    if (showServerDialog) {
+        AlertDialog(
+            onDismissRequest = { showServerDialog = false },
+            title = { Text(text = "Configure Backend Server") },
+            text = {
+                Column {
+                    Text(
+                        text = "Use 10.0.2.2 for Android Emulator, or your computer's local IP (e.g. 10.115.219.129) for physical devices.",
+                        fontSize = 13.sp,
+                        color = MiloGray
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = serverUrlInput,
+                        onValueChange = { serverUrlInput = it },
+                        label = { Text("Server URL") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (serverUrlInput.isNotBlank()) {
+                            sessionManager.baseUrl = serverUrlInput
+                        }
+                        showServerDialog = false
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showServerDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
+
 // ========================================================
-// MILO TEXT FIELD
+// TEXT FIELD COMPONENT
 // ========================================================
 
 @Composable
@@ -384,11 +453,9 @@ private fun MiloTextField(
     placeholder: String,
     isPassword: Boolean = false
 ) {
-
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-
         Text(
             text = label,
             color = MiloDark,
@@ -399,7 +466,6 @@ private fun MiloTextField(
                 bottom = 7.dp
             )
         )
-
 
         OutlinedTextField(
             value = value,

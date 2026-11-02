@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,23 +13,29 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.firebase.auth.FirebaseAuth
+import com.example.milo_2.data.auth.AuthApiClient
+import com.example.milo_2.data.auth.SessionManager
+import kotlinx.coroutines.launch
 
 
 // ========================================================
@@ -51,12 +58,16 @@ fun LoginScreen(
     onSignup: () -> Unit = {},
     onLoginSuccess: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val authClient = remember { AuthApiClient(context) }
+    val sessionManager = remember { SessionManager(context) }
 
     // ====================================================
     // STATES
     // ====================================================
 
-    var email by remember {
+    var emailOrUsername by remember {
         mutableStateOf("")
     }
 
@@ -72,6 +83,13 @@ fun LoginScreen(
         mutableStateOf(false)
     }
 
+    var showServerDialog by remember {
+        mutableStateOf(false)
+    }
+
+    var serverUrlInput by remember {
+        mutableStateOf(sessionManager.baseUrl)
+    }
 
     // ====================================================
     // MAIN SCREEN
@@ -91,7 +109,6 @@ fun LoginScreen(
             ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-
 
         // =================================================
         // BACK BUTTON
@@ -115,15 +132,9 @@ fun LoginScreen(
             )
         }
 
-
-        // =================================================
-        // SPACE
-        // =================================================
-
         Spacer(
             modifier = Modifier.height(30.dp)
         )
-
 
         // =================================================
         // TITLE
@@ -136,15 +147,9 @@ fun LoginScreen(
             fontWeight = FontWeight.Bold
         )
 
-
         Spacer(
             modifier = Modifier.height(8.dp)
         )
-
-
-        // =================================================
-        // DESCRIPTION
-        // =================================================
 
         Text(
             text = "Log in to continue pooling\nwith people.",
@@ -153,35 +158,27 @@ fun LoginScreen(
             lineHeight = 22.sp
         )
 
-
-        // =================================================
-        // SPACE
-        // =================================================
-
         Spacer(
             modifier = Modifier.height(40.dp)
         )
 
-
         // =================================================
-        // EMAIL
+        // EMAIL OR USERNAME
         // =================================================
 
         MiloLoginTextField(
-            value = email,
+            value = emailOrUsername,
             onValueChange = {
-                email = it
+                emailOrUsername = it
                 errorMessage = ""
             },
-            label = "Email",
-            placeholder = "Enter your email"
+            label = "Email or Username",
+            placeholder = "Enter your email or username"
         )
-
 
         Spacer(
             modifier = Modifier.height(18.dp)
         )
-
 
         // =================================================
         // PASSWORD
@@ -198,18 +195,15 @@ fun LoginScreen(
             isPassword = true
         )
 
-
         Spacer(
             modifier = Modifier.height(14.dp)
         )
-
 
         // =================================================
         // ERROR MESSAGE
         // =================================================
 
         if (errorMessage.isNotEmpty()) {
-
             Text(
                 text = errorMessage,
                 color = Color.Red,
@@ -223,11 +217,9 @@ fun LoginScreen(
             )
         }
 
-
         Spacer(
             modifier = Modifier.height(10.dp)
         )
-
 
         // =================================================
         // LOGIN BUTTON
@@ -248,78 +240,34 @@ fun LoginScreen(
                 .clickable(
                     enabled = !isLoading
                 ) {
-
-                    // =====================================
-                    // VALIDATION
-                    // =====================================
-
-                    if (email.isBlank()) {
-
-                        errorMessage =
-                            "Please enter your email"
-
+                    if (emailOrUsername.isBlank()) {
+                        errorMessage = "Please enter your email or username"
                         return@clickable
                     }
-
 
                     if (password.isBlank()) {
-
-                        errorMessage =
-                            "Please enter your password"
-
+                        errorMessage = "Please enter your password"
                         return@clickable
                     }
-
-
-                    // =====================================
-                    // START LOGIN
-                    // =====================================
 
                     errorMessage = ""
                     isLoading = true
 
-
-                    // =====================================
-                    // FIREBASE LOGIN
-                    //
-                    // Firebase is created here instead
-                    // of during Preview.
-                    // =====================================
-
-                    FirebaseAuth
-                        .getInstance()
-                        .signInWithEmailAndPassword(
-                            email.trim(),
-                            password
+                    coroutineScope.launch {
+                        val result = authClient.login(
+                            emailOrUsername = emailOrUsername.trim(),
+                            password = password
                         )
-                        .addOnCompleteListener { task ->
-
-                            isLoading = false
-
-
-                            if (task.isSuccessful) {
-
-                                // =================================
-                                // LOGIN SUCCESS
-                                // =================================
-
-                                onLoginSuccess()
-
-                            } else {
-
-                                // =================================
-                                // LOGIN FAILED
-                                // =================================
-
-                                errorMessage =
-                                    task.exception?.message
-                                        ?: "Login failed"
-                            }
+                        isLoading = false
+                        result.onSuccess {
+                            onLoginSuccess()
+                        }.onFailure { ex ->
+                            errorMessage = ex.message ?: "Authentication failed. Please try again."
                         }
+                    }
                 },
             contentAlignment = Alignment.Center
         ) {
-
             Text(
                 text = if (isLoading) {
                     "Logging in..."
@@ -332,15 +280,9 @@ fun LoginScreen(
             )
         }
 
-
-        // =================================================
-        // SPACE
-        // =================================================
-
         Spacer(
             modifier = Modifier.height(28.dp)
         )
-
 
         // =================================================
         // SIGNUP
@@ -356,6 +298,67 @@ fun LoginScreen(
                     onSignup()
                 }
                 .padding(8.dp)
+        )
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        // =================================================
+        // BACKEND SERVER URL CONFIG
+        // =================================================
+        Row(
+            modifier = Modifier
+                .clickable {
+                    serverUrlInput = sessionManager.baseUrl
+                    showServerDialog = true
+                }
+                .padding(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Backend: ${sessionManager.baseUrl} ⚙️",
+                color = MiloGray,
+                fontSize = 12.sp
+            )
+        }
+    }
+
+    if (showServerDialog) {
+        AlertDialog(
+            onDismissRequest = { showServerDialog = false },
+            title = { Text(text = "Configure Backend Server") },
+            text = {
+                Column {
+                    Text(
+                        text = "Use 10.0.2.2 for Android Emulator, or your computer's local IP (e.g. 10.115.219.129) for physical devices.",
+                        fontSize = 13.sp,
+                        color = MiloGray
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = serverUrlInput,
+                        onValueChange = { serverUrlInput = it },
+                        label = { Text("Server URL") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (serverUrlInput.isNotBlank()) {
+                            sessionManager.baseUrl = serverUrlInput
+                        }
+                        showServerDialog = false
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showServerDialog = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }
@@ -373,16 +376,9 @@ private fun MiloLoginTextField(
     placeholder: String,
     isPassword: Boolean = false
 ) {
-
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-
-
-        // =================================================
-        // LABEL
-        // =================================================
-
         Text(
             text = label,
             color = MiloDark,
@@ -394,17 +390,11 @@ private fun MiloLoginTextField(
             )
         )
 
-
-        // =================================================
-        // TEXT FIELD
-        // =================================================
-
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier.fillMaxWidth(),
             placeholder = {
-
                 Text(
                     text = placeholder,
                     color = MiloGray.copy(
@@ -415,11 +405,8 @@ private fun MiloLoginTextField(
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
             visualTransformation = if (isPassword) {
-
                 PasswordVisualTransformation()
-
             } else {
-
                 VisualTransformation.None
             }
         )
@@ -437,6 +424,5 @@ private fun MiloLoginTextField(
 )
 @Composable
 private fun LoginScreenPreview() {
-
     LoginScreen()
 }
