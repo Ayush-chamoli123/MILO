@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
 
+    # Environment & Debug
+    ENVIRONMENT: str = "development"
+    DEBUG: bool = True
+
     # Database
     DATABASE_URL: str = "sqlite:///./milo.db"
 
@@ -25,6 +29,20 @@ class Settings(BaseSettings):
 
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = ["*"]
+
+    # SMTP Email Configuration (Optional for real email dispatch)
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_TLS: bool = True
+    EMAILS_FROM_EMAIL: str = "noreply@milo.app"
+    EMAILS_FROM_NAME: str = "MILO App"
+
+    # SMS Gateway Configuration (Optional, e.g. Twilio)
+    TWILIO_ACCOUNT_SID: str | None = None
+    TWILIO_AUTH_TOKEN: str | None = None
+    TWILIO_PHONE_NUMBER: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parent.parent.parent / ".env"),

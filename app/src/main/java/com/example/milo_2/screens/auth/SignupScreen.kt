@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -29,6 +30,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -62,7 +65,8 @@ private val MiloGray = Color(0xFF6B7280)
 fun SignupScreen(
     onBack: () -> Unit = {},
     onLogin: () -> Unit = {},
-    onSignupSuccess: () -> Unit = {}
+    onSignupSuccess: () -> Unit = {},
+    onNavigateToOtp: (destination: String, type: String, email: String, phone: String) -> Unit = { _, _, _, _ -> }
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -106,6 +110,8 @@ fun SignupScreen(
     }
 
     val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     Column(
         modifier = Modifier
@@ -113,6 +119,7 @@ fun SignupScreen(
             .background(MiloWhite)
             .statusBarsPadding()
             .navigationBarsPadding()
+            .imePadding()
             .verticalScroll(scrollState)
             .padding(
                 start = 28.dp,
@@ -272,17 +279,41 @@ fun SignupScreen(
         // =================================================
 
         if (errorMessage.isNotEmpty()) {
-            Text(
-                text = errorMessage,
-                color = Color.Red,
-                fontSize = 14.sp,
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(
                         start = 4.dp,
                         bottom = 10.dp
                     )
-            )
+            ) {
+                Text(
+                    text = errorMessage,
+                    color = Color.Red,
+                    fontSize = 14.sp
+                )
+                if (errorMessage.contains("Network error")) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "🔄 Test Backend Connection",
+                        color = MiloDark,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clickable {
+                                coroutineScope.launch {
+                                    val isAlive = authClient.checkHealth()
+                                    if (isAlive) {
+                                        errorMessage = ""
+                                    } else {
+                                        errorMessage = "Backend still not responding at ${sessionManager.baseUrl}. Ensure FastAPI is started on your computer."
+                                    }
+                                }
+                            }
+                            .padding(vertical = 4.dp)
+                    )
+                }
+            }
         }
 
         // =================================================
@@ -329,6 +360,8 @@ fun SignupScreen(
 
                     errorMessage = ""
                     isLoading = true
+                    keyboardController?.hide()
+                    focusManager.clearFocus()
 
                     coroutineScope.launch {
                         val result = authClient.register(
@@ -338,8 +371,14 @@ fun SignupScreen(
                             password = password
                         )
                         isLoading = false
-                        result.onSuccess {
-                            onSignupSuccess()
+                        result.onSuccess { authData ->
+                            if (authData.requiresOtp) {
+                                val dest = authData.maskedDestination ?: email.trim()
+                                val channel = authData.otpChannel ?: "EMAIL"
+                                onNavigateToOtp(dest, channel, email.trim(), "")
+                            } else {
+                                onSignupSuccess()
+                            }
                         }.onFailure { ex ->
                             errorMessage = ex.message ?: "Account creation failed. Please try again."
                         }

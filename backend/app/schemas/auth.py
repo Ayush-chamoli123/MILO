@@ -9,7 +9,7 @@ Strictly excludes sensitive attributes such as `password_hash`.
 from datetime import datetime
 import re
 from typing import Any
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.entities import ProfileVisibility, UserStatus, VerificationType, VerificationStatus
 
@@ -106,6 +106,7 @@ class UserLoginRequest(BaseModel):
     """
     Payload for authenticating an existing user.
     Supports login via email, username, or unified `email_or_username`.
+    Also supports passwordless login via OTP.
     """
     email: str | None = Field(
         default=None,
@@ -122,12 +123,15 @@ class UserLoginRequest(BaseModel):
         description="Unified identifier (accepts either email or handle)",
         examples=["alice@example.com"],
     )
-    password: str = Field(
-        ...,
-        min_length=1,
+    password: str | None = Field(
+        default=None,
         max_length=128,
-        description="Plaintext password",
+        description="Plaintext password (optional if login_with_otp is True)",
         examples=["SuperSecret123!"],
+    )
+    login_with_otp: bool = Field(
+        default=False,
+        description="If True, requests a 6-digit OTP to be dispatched for sign-in instead of password verification",
     )
     device_name: str | None = Field(
         default=None,
@@ -149,6 +153,12 @@ class UserLoginRequest(BaseModel):
                 raise ValueError("Invalid email format")
             return cleaned
         return None
+
+    @model_validator(mode="after")
+    def check_password_or_otp(self) -> "UserLoginRequest":
+        if not self.login_with_otp and not self.password:
+            raise ValueError("Password is required unless login_with_otp is specified.")
+        return self
 
 
 class RefreshTokenRequest(BaseModel):
@@ -229,6 +239,10 @@ class VerifyOtpRequest(BaseModel):
         description="Target phone number (if unauthenticated)",
         examples=["+15551234567"],
     )
+    device_name: str | None = Field(
+        default=None,
+        description="Device name for issuing session tokens upon successful verification",
+    )
 
     @field_validator("otp_code")
     @classmethod
@@ -279,6 +293,22 @@ class AuthResponse(BaseModel):
     """Unified payload returned upon successful registration or login."""
     user: UserResponse
     tokens: TokenResponse
+    requires_otp: bool = Field(
+        default=False,
+        description="Indicates whether OTP verification is required before full session access",
+    )
+    otp_channel: VerificationType | None = Field(
+        default=None,
+        description="Verification channel: EMAIL or PHONE",
+    )
+    masked_destination: str | None = Field(
+        default=None,
+        description="Masked target address where OTP was dispatched",
+    )
+    debug_otp: str | None = Field(
+        default=None,
+        description="Development preview of OTP code for testing",
+    )
 
 
 class TokenPayload(BaseModel):
@@ -301,6 +331,10 @@ class OtpSentResponse(BaseModel):
         default=600,
         description="OTP validity period in seconds (default: 10 minutes)",
     )
+    debug_otp: str | None = Field(
+        default=None,
+        description="Development preview of OTP code (only in non-production / simulation)",
+    )
 
 
 class VerificationResponse(BaseModel):
@@ -311,6 +345,14 @@ class VerificationResponse(BaseModel):
     user_id: str
     is_email_verified: bool
     is_phone_verified: bool
+    user: UserResponse | None = Field(
+        default=None,
+        description="User profile if authenticated via OTP",
+    )
+    tokens: TokenResponse | None = Field(
+        default=None,
+        description="JWT session tokens if issued upon verification",
+    )
 
 
 # Backward-compatible aliases

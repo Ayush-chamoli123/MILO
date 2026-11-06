@@ -48,6 +48,21 @@ def get_current_authenticated_user(
     return auth_service.get_current_user(credentials.credentials)
 
 
+def get_current_verified_user(
+    current_user: User = Depends(get_current_authenticated_user),
+) -> User:
+    """
+    Strict dependency requiring the user to have verified their email via OTP.
+    Blocks unverified accounts from accessing authenticated business resources.
+    """
+    if not current_user.is_email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email address has not been verified. Please complete OTP verification.",
+        )
+    return current_user
+
+
 def get_optional_authenticated_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security_scheme),
     auth_service: AuthService = Depends(get_auth_service),
@@ -70,7 +85,7 @@ def register(
     request: UserRegisterRequest,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> AuthResponse:
-    """Register a new user account and obtain authentication tokens."""
+    """Register a new user account, dispatch email verification OTP, and obtain tokens."""
     return auth_service.register(request)
 
 
@@ -79,7 +94,7 @@ def login(
     request: UserLoginRequest,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> AuthResponse:
-    """Authenticate with email/username and password to obtain JWT tokens."""
+    """Authenticate with email/username and password, or trigger passwordless OTP sign-in."""
     return auth_service.login(request)
 
 
@@ -151,7 +166,8 @@ def verify_otp(
 ) -> VerificationResponse:
     """
     Validate a user-submitted 6-digit OTP code.
-    Upon successful validation, updates `is_email_verified` or `is_phone_verified` on the user account.
+    Upon successful validation, updates `is_email_verified` or `is_phone_verified` on the user account,
+    and returns newly issued session tokens for sign-in.
     """
     return auth_service.verify_otp(
         user=current_user,
@@ -159,4 +175,5 @@ def verify_otp(
         phone_number=request.phone_number,
         verification_type=request.type,
         otp_code=request.otp_code,
+        device_name=request.device_name,
     )

@@ -74,6 +74,7 @@ from app.schemas.auth import (
     VerificationResponse,
     VerifyOtpRequest,
 )
+from app.services.email_service import send_otp_email, send_otp_sms
 
 
 # ==============================================================================
@@ -90,7 +91,7 @@ class EmailAlreadyExistsError(AuthError):
     def __init__(self, email: str) -> None:
         super().__init__(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"An account with email '{email}' already exists.",
+            detail=f"An account with email '{email}' already exists. Please log in or reset password.",
         )
 
 
@@ -98,7 +99,7 @@ class UsernameAlreadyExistsError(AuthError):
     def __init__(self, username: str) -> None:
         super().__init__(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Username '{username}' is already taken.",
+            detail=f"The username handle '@{username}' is already taken. Please choose another.",
         )
 
 
@@ -106,12 +107,12 @@ class PhoneNumberAlreadyExistsError(AuthError):
     def __init__(self, phone_number: str) -> None:
         super().__init__(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Phone number '{phone_number}' is already registered.",
+            detail=f"The phone number '{phone_number}' is already linked to another account.",
         )
 
 
 class InvalidCredentialsError(AuthError):
-    def __init__(self, detail: str = "Invalid email or password.") -> None:
+    def __init__(self, detail: str = "Invalid email/username or password.") -> None:
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=detail,
@@ -119,7 +120,7 @@ class InvalidCredentialsError(AuthError):
 
 
 class AccountInactiveError(AuthError):
-    def __init__(self, detail: str = "User account is inactive or has been deleted.") -> None:
+    def __init__(self, detail: str = "Account is inactive or has been deleted.") -> None:
         super().__init__(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=detail,
@@ -127,7 +128,7 @@ class AccountInactiveError(AuthError):
 
 
 class AccountSuspendedError(AuthError):
-    def __init__(self, detail: str = "User account has been suspended.") -> None:
+    def __init__(self, detail: str = "Account has been suspended due to policy violations.") -> None:
         super().__init__(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=detail,
@@ -135,7 +136,7 @@ class AccountSuspendedError(AuthError):
 
 
 class InvalidTokenError(AuthError):
-    def __init__(self, detail: str = "Could not validate authentication token.") -> None:
+    def __init__(self, detail: str = "Invalid or expired authentication token.") -> None:
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=detail,
@@ -143,7 +144,7 @@ class InvalidTokenError(AuthError):
 
 
 class SessionRevokedOrExpiredError(AuthError):
-    def __init__(self, detail: str = "Session has expired or was revoked upon logout.") -> None:
+    def __init__(self, detail: str = "Session has been revoked or expired. Please re-authenticate.") -> None:
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=detail,
@@ -205,6 +206,7 @@ class AuthService:
         3. Instantiates User domain model (excluding password from response).
         4. Persists user via UserRepository.
         5. Issues access and refresh tokens, registering an active UserSession (AUTH-10).
+        6. Automatically dispatches an email OTP verification code.
         """
         # 1. Uniqueness Validations
         if self.user_repo.exists_by_email(request.email):
@@ -247,9 +249,19 @@ class AuthService:
             ip_address=None,
         )
 
+        # 6. Automatically dispatch verification OTP for newly registered account
+        otp_sent = self.send_verification_otp(
+            user=persisted_user,
+            verification_type=VerificationType.EMAIL,
+        )
+
         return AuthResponse(
             user=UserResponse.model_validate(persisted_user),
             tokens=tokens,
+            requires_otp=True,
+            otp_channel=otp_sent.type,
+            masked_destination=otp_sent.destination,
+            debug_otp=otp_sent.debug_otp,
         )
 
     # --------------------------------------------------------------------------
@@ -261,9 +273,10 @@ class AuthService:
         Authenticates an existing user:
         1. Finds user by email, username, or unified email_or_username identifier.
         2. Verifies account is active, non-suspended, and not soft-deleted.
-        3. Verifies plaintext password against stored hash.
-        4. Issues new JWT access and refresh tokens.
-        5. Records login session in `user_sessions` table.
+        3. Verifies plaintext password against stored hash (or handles passwordless OTP login).
+        4. If email or phone is unverified, or if login_with_otp is True, dispatches an OTP.
+        5. Issues JWT access and refresh tokens.
+        6. Records login session in `user_sessions` table.
         """
         # 1. Resolve User
         user: User | None = None
@@ -286,8 +299,29 @@ class AuthService:
         if user.status in (UserStatus.INACTIVE, UserStatus.DELETED) or user.deleted_at is not None:
             raise AccountInactiveError("Account is inactive or has been deleted.")
 
+        # Handle passwordless login via OTP
+        if request.login_with_otp:
+            otp_channel = VerificationType.EMAIL if user.email else VerificationType.PHONE
+            otp_sent = self.send_verification_otp(
+                user=user,
+                verification_type=otp_channel,
+            )
+            tokens = self._issue_session_tokens(
+                user=user,
+                device_name=request.device_name,
+                ip_address=request.ip_address,
+            )
+            return AuthResponse(
+                user=UserResponse.model_validate(user),
+                tokens=tokens,
+                requires_otp=True,
+                otp_channel=otp_sent.type,
+                masked_destination=otp_sent.destination,
+                debug_otp=otp_sent.debug_otp,
+            )
+
         # 3. Verify Password (AUTH-08)
-        if not verify_password(request.password, user.password_hash):
+        if not request.password or not verify_password(request.password, user.password_hash):
             raise InvalidCredentialsError("Invalid credentials.")
 
         # 4. Issue Tokens and Register Session (AUTH-10)
@@ -297,9 +331,26 @@ class AuthService:
             ip_address=request.ip_address,
         )
 
+        # 5. Check if account requires email or phone OTP verification
+        if not user.is_email_verified and not user.is_phone_verified:
+            otp_channel = VerificationType.EMAIL if user.email else VerificationType.PHONE
+            otp_sent = self.send_verification_otp(
+                user=user,
+                verification_type=otp_channel,
+            )
+            return AuthResponse(
+                user=UserResponse.model_validate(user),
+                tokens=tokens,
+                requires_otp=True,
+                otp_channel=otp_sent.type,
+                masked_destination=otp_sent.destination,
+                debug_otp=otp_sent.debug_otp,
+            )
+
         return AuthResponse(
             user=UserResponse.model_validate(user),
             tokens=tokens,
+            requires_otp=False,
         )
 
     # --------------------------------------------------------------------------
@@ -317,7 +368,7 @@ class AuthService:
         Generates and sends a 6-digit OTP code to a user's email or phone number.
         - Invalidates previous pending OTP requests for this channel.
         - Sets a 10-minute expiration window.
-        - Logs/dispatches code to the designated transport channel.
+        - Dispatches code via SMTP Email or SMS gateway.
         """
         target_user = self._resolve_target_user(
             user=user, email=email, phone_number=phone_number
@@ -361,11 +412,14 @@ class AuthService:
         self._dispatch_otp(destination, otp_code, verification_type)
 
         masked_dest = self._mask_destination(destination, verification_type)
+        debug_code = otp_code if (settings.DEBUG or settings.ENVIRONMENT != "production") else None
+
         return OtpSentResponse(
             message=f"OTP verification code sent successfully to {masked_dest}.",
             type=verification_type,
             destination=masked_dest,
             expires_in_seconds=600,
+            debug_otp=debug_code,
         )
 
     def verify_otp(
@@ -375,6 +429,7 @@ class AuthService:
         phone_number: str | None = None,
         verification_type: VerificationType = VerificationType.EMAIL,
         otp_code: str = "",
+        device_name: str | None = None,
     ) -> VerificationResponse:
         """
         Verifies a user-submitted OTP:
@@ -383,6 +438,7 @@ class AuthService:
         3. Enforces rate-limiting / brute-force throttle (maximum 5 attempts).
         4. Uses constant-time comparison to prevent timing attacks.
         5. Updates user `is_email_verified` or `is_phone_verified` boolean to True.
+        6. Issues fresh session tokens so user is authenticated upon verification.
         """
         target_user = self._resolve_target_user(
             user=user, email=email, phone_number=phone_number
@@ -400,7 +456,6 @@ class AuthService:
 
         # Check Expiration (AUTH-09)
         if verification.expires_at:
-            # Handle tz-naive vs tz-aware comparisons safely
             exp = verification.expires_at
             if exp.tzinfo is None:
                 exp = exp.replace(tzinfo=timezone.utc)
@@ -443,6 +498,13 @@ class AuthService:
         self.db.commit()
         self.db.refresh(target_user)
 
+        # Issue fresh session tokens so user is authenticated upon verification
+        tokens = self._issue_session_tokens(
+            user=target_user,
+            device_name=device_name or "Android Device",
+            ip_address=None,
+        )
+
         return VerificationResponse(
             message=f"{verification_type.value.capitalize()} verified successfully.",
             verified=True,
@@ -450,6 +512,8 @@ class AuthService:
             user_id=target_user.user_id,
             is_email_verified=target_user.is_email_verified,
             is_phone_verified=target_user.is_phone_verified,
+            user=UserResponse.model_validate(target_user),
+            tokens=tokens,
         )
 
     # --------------------------------------------------------------------------
@@ -610,14 +674,14 @@ class AuthService:
         self, destination: str, otp_code: str, verification_type: VerificationType
     ) -> None:
         """
-        Dispatches OTP code via SMS gateway (e.g. Twilio) or Email provider (e.g. Sendgrid/SES).
+        Dispatches OTP code via SMS gateway (e.g. Twilio) or Email provider (e.g. SMTP/SendGrid).
         Logs transmission for operational visibility.
         """
-        logger.info(
-            f"[OTP DISPATCH] Channel: {verification_type.value} | Destination: {destination} | Code: {otp_code}"
-        )
-        # Development / Testing console output:
-        print(f"  [OTP DISPATCH -> {verification_type.value}] Destination: {destination} | CODE: {otp_code}")
+        logger.info("[OTP DISPATCH] Channel: %s", verification_type.value)
+        if verification_type == VerificationType.EMAIL:
+            send_otp_email(to_email=destination, otp_code=otp_code, user_name="MILO User")
+        elif verification_type == VerificationType.PHONE:
+            send_otp_sms(to_phone=destination, otp_code=otp_code)
 
     def _issue_session_tokens(
         self,

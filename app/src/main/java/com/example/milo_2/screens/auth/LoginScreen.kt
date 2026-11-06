@@ -1,7 +1,12 @@
 package com.example.milo_2.screens.auth
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +18,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -27,10 +34,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.milo_2.data.auth.AuthApiClient
@@ -56,7 +65,8 @@ private val MiloGray = Color(0xFF6B7280)
 fun LoginScreen(
     onBack: () -> Unit = {},
     onSignup: () -> Unit = {},
-    onLoginSuccess: () -> Unit = {}
+    onLoginSuccess: () -> Unit = {},
+    onNavigateToOtp: (destination: String, type: String, email: String, phone: String) -> Unit = { _, _, _, _ -> }
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -75,6 +85,14 @@ fun LoginScreen(
         mutableStateOf("")
     }
 
+    var isOtpMode by remember {
+        mutableStateOf(false)
+    }
+
+    var isPasswordVisible by remember {
+        mutableStateOf(false)
+    }
+
     var errorMessage by remember {
         mutableStateOf("")
     }
@@ -91,6 +109,10 @@ fun LoginScreen(
         mutableStateOf(sessionManager.baseUrl)
     }
 
+    val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     // ====================================================
     // MAIN SCREEN
     // ====================================================
@@ -101,6 +123,8 @@ fun LoginScreen(
             .background(MiloWhite)
             .statusBarsPadding()
             .navigationBarsPadding()
+            .imePadding()
+            .verticalScroll(scrollState)
             .padding(
                 start = 28.dp,
                 end = 28.dp,
@@ -128,12 +152,12 @@ fun LoginScreen(
                     .clickable {
                         onBack()
                     }
-                    .padding(horizontal = 5.dp)
+                    .padding(4.dp)
             )
         }
 
         Spacer(
-            modifier = Modifier.height(30.dp)
+            modifier = Modifier.height(20.dp)
         )
 
         // =================================================
@@ -141,9 +165,9 @@ fun LoginScreen(
         // =================================================
 
         Text(
-            text = "Welcome Back",
+            text = if (isOtpMode) "Sign In with OTP" else "Log In",
             color = MiloDark,
-            fontSize = 30.sp,
+            fontSize = 36.sp,
             fontWeight = FontWeight.Bold
         )
 
@@ -152,51 +176,187 @@ fun LoginScreen(
         )
 
         Text(
-            text = "Log in to continue pooling\nwith people.",
+            text = if (isOtpMode)
+                "Enter your email or phone number to receive a 6-digit verification code."
+            else
+                "Welcome back! Enter your details to continue.",
             color = MiloGray,
-            fontSize = 16.sp,
-            lineHeight = 22.sp
+            fontSize = 15.sp
         )
 
         Spacer(
-            modifier = Modifier.height(40.dp)
+            modifier = Modifier.height(28.dp)
         )
 
         // =================================================
-        // EMAIL OR USERNAME
+        // EMAIL / USERNAME FIELD
         // =================================================
 
-        MiloLoginTextField(
-            value = emailOrUsername,
-            onValueChange = {
-                emailOrUsername = it
-                errorMessage = ""
-            },
-            label = "Email or Username",
-            placeholder = "Enter your email or username"
+        Text(
+            text = if (isOtpMode) "Email or Phone Number" else "Email or Username",
+            color = MiloDark,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = 4.dp,
+                    bottom = 8.dp
+                )
         )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .background(
+                    color = Color.White,
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color(0xFFE5E7EB),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .padding(
+                    horizontal = 16.dp
+                ),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            BasicTextField(
+                value = emailOrUsername,
+                onValueChange = {
+                    emailOrUsername = it
+                    errorMessage = ""
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = if (isOtpMode) KeyboardType.Email else KeyboardType.Text
+                ),
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    fontSize = 16.sp,
+                    color = MiloDark
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            if (emailOrUsername.isEmpty()) {
+                Text(
+                    text = if (isOtpMode) "e.g. user@gmail.com or +15551234567" else "Enter your email or username",
+                    color = Color(0xFF9CA3AF),
+                    fontSize = 15.sp
+                )
+            }
+        }
 
         Spacer(
             modifier = Modifier.height(18.dp)
         )
 
         // =================================================
-        // PASSWORD
+        // PASSWORD FIELD (Only in password mode)
         // =================================================
 
-        MiloLoginTextField(
-            value = password,
-            onValueChange = {
-                password = it
-                errorMessage = ""
-            },
-            label = "Password",
-            placeholder = "Enter your password",
-            isPassword = true
-        )
+        if (!isOtpMode) {
+            Text(
+                text = "Password",
+                color = MiloDark,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = 4.dp,
+                        bottom = 8.dp
+                    )
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .background(
+                        color = Color.White,
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = Color(0xFFE5E7EB),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .padding(
+                        horizontal = 16.dp
+                    ),
+                contentAlignment = Alignment.CenterStart
+            ) {
+
+                BasicTextField(
+                    value = password,
+                    onValueChange = {
+                        password = it
+                        errorMessage = ""
+                    },
+                    singleLine = true,
+                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontSize = 16.sp,
+                        color = MiloDark
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (password.isEmpty()) {
+                    Text(
+                        text = "Enter your password",
+                        color = Color(0xFF9CA3AF),
+                        fontSize = 15.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Switch to OTP mode link
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Text(
+                    text = "Sign in with OTP code instead",
+                    color = MiloOrange,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clickable {
+                            isOtpMode = true
+                            errorMessage = ""
+                        }
+                        .padding(4.dp)
+                )
+            }
+        } else {
+            // Switch back to Password mode link
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start
+            ) {
+                Text(
+                    text = "← Use password to sign in",
+                    color = MiloDark,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clickable {
+                            isOtpMode = false
+                            errorMessage = ""
+                        }
+                        .padding(4.dp)
+                )
+            }
+        }
 
         Spacer(
-            modifier = Modifier.height(14.dp)
+            modifier = Modifier.height(16.dp)
         )
 
         // =================================================
@@ -204,17 +364,41 @@ fun LoginScreen(
         // =================================================
 
         if (errorMessage.isNotEmpty()) {
-            Text(
-                text = errorMessage,
-                color = Color.Red,
-                fontSize = 14.sp,
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(
                         start = 4.dp,
                         bottom = 12.dp
                     )
-            )
+            ) {
+                Text(
+                    text = errorMessage,
+                    color = Color.Red,
+                    fontSize = 14.sp
+                )
+                if (errorMessage.contains("Network error")) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "🔄 Test Backend Connection",
+                        color = MiloDark,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clickable {
+                                coroutineScope.launch {
+                                    val isAlive = authClient.checkHealth()
+                                    if (isAlive) {
+                                        errorMessage = ""
+                                    } else {
+                                        errorMessage = "Backend still not responding at ${sessionManager.baseUrl}. Ensure FastAPI is started on your computer."
+                                    }
+                                }
+                            }
+                            .padding(vertical = 4.dp)
+                    )
+                }
+            }
         }
 
         Spacer(
@@ -222,7 +406,7 @@ fun LoginScreen(
         )
 
         // =================================================
-        // LOGIN BUTTON
+        // PRIMARY ACTION BUTTON
         // =================================================
 
         Box(
@@ -245,24 +429,60 @@ fun LoginScreen(
                         return@clickable
                     }
 
-                    if (password.isBlank()) {
+                    if (!isOtpMode && password.isBlank()) {
                         errorMessage = "Please enter your password"
                         return@clickable
                     }
 
                     errorMessage = ""
                     isLoading = true
+                    keyboardController?.hide()
+                    focusManager.clearFocus()
 
                     coroutineScope.launch {
-                        val result = authClient.login(
-                            emailOrUsername = emailOrUsername.trim(),
-                            password = password
-                        )
-                        isLoading = false
-                        result.onSuccess {
-                            onLoginSuccess()
-                        }.onFailure { ex ->
-                            errorMessage = ex.message ?: "Authentication failed. Please try again."
+                        if (isOtpMode) {
+                            // Passwordless OTP Login
+                            val isPhone = emailOrUsername.trim().startsWith("+") || emailOrUsername.trim().all { it.isDigit() || it == '-' || it == ' ' }
+                            val channel = if (isPhone) "PHONE" else "EMAIL"
+                            val sendResult = authClient.sendOtp(
+                                email = if (!isPhone) emailOrUsername.trim() else null,
+                                phoneNumber = if (isPhone) emailOrUsername.trim() else null,
+                                type = channel
+                            )
+                            isLoading = false
+                            sendResult.onSuccess { otpData ->
+                                onNavigateToOtp(
+                                    otpData.destination,
+                                    otpData.type,
+                                    if (!isPhone) emailOrUsername.trim() else "",
+                                    if (isPhone) emailOrUsername.trim() else ""
+                                )
+                            }.onFailure { ex ->
+                                errorMessage = ex.message ?: "Failed to dispatch OTP code. Please check your details."
+                            }
+                        } else {
+                            // Standard Password Login
+                            val result = authClient.login(
+                                emailOrUsername = emailOrUsername.trim(),
+                                password = password
+                            )
+                            isLoading = false
+                            result.onSuccess { authData ->
+                                if (authData.requiresOtp) {
+                                    val dest = authData.maskedDestination ?: emailOrUsername.trim()
+                                    val channel = authData.otpChannel ?: "EMAIL"
+                                    onNavigateToOtp(
+                                        dest,
+                                        channel,
+                                        if (channel == "EMAIL") emailOrUsername.trim() else "",
+                                        if (channel == "PHONE") emailOrUsername.trim() else ""
+                                    )
+                                } else {
+                                    onLoginSuccess()
+                                }
+                            }.onFailure { ex ->
+                                errorMessage = ex.message ?: "Authentication failed. Please try again."
+                            }
                         }
                     }
                 },
@@ -270,9 +490,9 @@ fun LoginScreen(
         ) {
             Text(
                 text = if (isLoading) {
-                    "Logging in..."
+                    if (isOtpMode) "Sending Code..." else "Logging in..."
                 } else {
-                    "Log In"
+                    if (isOtpMode) "Send Verification Code" else "Log In"
                 },
                 color = MiloDark,
                 fontSize = 18.sp,
@@ -285,7 +505,7 @@ fun LoginScreen(
         )
 
         // =================================================
-        // SIGNUP
+        // SIGNUP LINK
         // =================================================
 
         Text(
@@ -305,6 +525,7 @@ fun LoginScreen(
         // =================================================
         // BACKEND SERVER URL CONFIG
         // =================================================
+
         Row(
             modifier = Modifier
                 .clickable {
@@ -361,68 +582,4 @@ fun LoginScreen(
             }
         )
     }
-}
-
-
-// ========================================================
-// MILO LOGIN TEXT FIELD
-// ========================================================
-
-@Composable
-private fun MiloLoginTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    placeholder: String,
-    isPassword: Boolean = false
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text(
-            text = label,
-            color = MiloDark,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(
-                start = 4.dp,
-                bottom = 7.dp
-            )
-        )
-
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = {
-                Text(
-                    text = placeholder,
-                    color = MiloGray.copy(
-                        alpha = 0.7f
-                    )
-                )
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            visualTransformation = if (isPassword) {
-                PasswordVisualTransformation()
-            } else {
-                VisualTransformation.None
-            }
-        )
-    }
-}
-
-
-// ========================================================
-// LOGIN PREVIEW
-// ========================================================
-
-@Preview(
-    showBackground = true,
-    showSystemUi = true
-)
-@Composable
-private fun LoginScreenPreview() {
-    LoginScreen()
 }
