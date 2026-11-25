@@ -40,6 +40,7 @@ fun OtpVerificationScreen(
     verificationType: String = "EMAIL",
     email: String = "",
     phoneNumber: String = "",
+    initialDevOtp: String? = null,
     onBack: () -> Unit = {},
     onVerificationSuccess: () -> Unit = {}
 ) {
@@ -53,7 +54,7 @@ fun OtpVerificationScreen(
     var isLoading by remember { mutableStateOf(false) }
     var isResending by remember { mutableStateOf(false) }
     var resendCooldown by remember { mutableIntStateOf(60) }
-    var devOtpPreview by remember { mutableStateOf<String?>(null) }
+    var devOtpPreview by remember { mutableStateOf(initialDevOtp) }
 
     val focusRequester = remember { FocusRequester() }
     val scrollState = rememberScrollState()

@@ -86,9 +86,9 @@ fun MiloNavGraph() {
                         popUpTo(Screen.Welcome.route) { inclusive = true }
                     }
                 },
-                onNavigateToOtp = { destination, type, email, phone ->
+                onNavigateToOtp = { destination, type, email, phone, devOtp ->
                     navController.navigate(
-                        Screen.OtpVerification.createRoute(destination, type, email, phone)
+                        Screen.OtpVerification.createRoute(destination, type, email, phone, devOtp)
                     )
                 }
             )
@@ -109,9 +109,9 @@ fun MiloNavGraph() {
                         popUpTo(Screen.Welcome.route) { inclusive = true }
                     }
                 },
-                onNavigateToOtp = { destination, type, email, phone ->
+                onNavigateToOtp = { destination, type, email, phone, devOtp ->
                     navController.navigate(
-                        Screen.OtpVerification.createRoute(destination, type, email, phone)
+                        Screen.OtpVerification.createRoute(destination, type, email, phone, devOtp)
                     )
                 }
             )
@@ -123,24 +123,31 @@ fun MiloNavGraph() {
                 navArgument("destination") { type = NavType.StringType },
                 navArgument("type") { type = NavType.StringType },
                 navArgument("email") { type = NavType.StringType },
-                navArgument("phone") { type = NavType.StringType }
+                navArgument("phone") { type = NavType.StringType },
+                navArgument("devOtp") {
+                    type = NavType.StringType
+                    defaultValue = "none"
+                }
             )
         ) { backStackEntry ->
             val destinationRaw = backStackEntry.arguments?.getString("destination") ?: ""
             val typeRaw = backStackEntry.arguments?.getString("type") ?: "EMAIL"
             val emailRaw = backStackEntry.arguments?.getString("email") ?: ""
             val phoneRaw = backStackEntry.arguments?.getString("phone") ?: ""
+            val devOtpRaw = backStackEntry.arguments?.getString("devOtp") ?: ""
 
             val destination = URLDecoder.decode(destinationRaw, "UTF-8").let { if (it == "none") "" else it }
             val type = URLDecoder.decode(typeRaw, "UTF-8").let { if (it == "none") "EMAIL" else it }
             val email = URLDecoder.decode(emailRaw, "UTF-8").let { if (it == "none") "" else it }
             val phone = URLDecoder.decode(phoneRaw, "UTF-8").let { if (it == "none") "" else it }
+            val devOtp = URLDecoder.decode(devOtpRaw, "UTF-8").let { if (it == "none" || it.isBlank()) null else it }
 
             OtpVerificationScreen(
                 destination = destination,
                 verificationType = type,
                 email = email,
                 phoneNumber = phone,
+                initialDevOtp = devOtp,
                 onBack = {
                     navController.popBackStack()
                 },

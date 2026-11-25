@@ -66,7 +66,7 @@ fun SignupScreen(
     onBack: () -> Unit = {},
     onLogin: () -> Unit = {},
     onSignupSuccess: () -> Unit = {},
-    onNavigateToOtp: (destination: String, type: String, email: String, phone: String) -> Unit = { _, _, _, _ -> }
+    onNavigateToOtp: (destination: String, type: String, email: String, phone: String, devOtp: String?) -> Unit = { _, _, _, _, _ -> }
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -375,7 +375,7 @@ fun SignupScreen(
                             if (authData.requiresOtp) {
                                 val dest = authData.maskedDestination ?: email.trim()
                                 val channel = authData.otpChannel ?: "EMAIL"
-                                onNavigateToOtp(dest, channel, email.trim(), "")
+                                onNavigateToOtp(dest, channel, email.trim(), "", authData.debugOtp)
                             } else {
                                 onSignupSuccess()
                             }

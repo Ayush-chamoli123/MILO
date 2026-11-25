@@ -110,7 +110,7 @@ tasks.register("startFastApiBackend") {
                     .directory(backendDir)
                     .start()
             } else {
-                ProcessBuilder("bash", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &")
+                ProcessBuilder("bash", "-c", "if [ -x .venv/bin/uvicorn ]; then .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload & elif [ -x .venv/bin/python ]; then .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload & else uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload & fi")
                     .directory(backendDir)
                     .start()
             }

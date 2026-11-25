@@ -66,7 +66,7 @@ fun LoginScreen(
     onBack: () -> Unit = {},
     onSignup: () -> Unit = {},
     onLoginSuccess: () -> Unit = {},
-    onNavigateToOtp: (destination: String, type: String, email: String, phone: String) -> Unit = { _, _, _, _ -> }
+    onNavigateToOtp: (destination: String, type: String, email: String, phone: String, devOtp: String?) -> Unit = { _, _, _, _, _ -> }
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -455,7 +455,8 @@ fun LoginScreen(
                                     otpData.destination,
                                     otpData.type,
                                     if (!isPhone) emailOrUsername.trim() else "",
-                                    if (isPhone) emailOrUsername.trim() else ""
+                                    if (isPhone) emailOrUsername.trim() else "",
+                                    otpData.debugOtp
                                 )
                             }.onFailure { ex ->
                                 errorMessage = ex.message ?: "Failed to dispatch OTP code. Please check your details."
@@ -475,7 +476,8 @@ fun LoginScreen(
                                         dest,
                                         channel,
                                         if (channel == "EMAIL") emailOrUsername.trim() else "",
-                                        if (channel == "PHONE") emailOrUsername.trim() else ""
+                                        if (channel == "PHONE") emailOrUsername.trim() else "",
+                                        authData.debugOtp
                                     )
                                 } else {
                                     onLoginSuccess()
